@@ -1,4 +1,3 @@
-library(rstanarm)
 library(dplyr)
 
 ###simulating data
@@ -136,28 +135,8 @@ table(close)
 dat <- data.frame(close, g_marketing, g_year, g_city, g_salesperson,
                   callcategory, n_service_calls, prior_revenue, call_to_estimate)
 
-###mlm
-mlm_sim <- stan_glmer(formula = close ~ (1|g_marketing) +
-                                (1|g_year) +
-                                (1|g_city) +
-                                (1|g_salesperson) +
-                                callcategory +
-                                n_service_calls +
-                                prior_revenue +
-                                call_to_estimate - 1, 
-                  data = dat,
-                  family = binomial,
-                  cores = 3,
-                  chains = 4,
-                  iter = 1000,
-                  warmup = 150,
-                  seed = 1, 
-                  refresh = 50)
 
-
-#check model
-print(mlm_sim)
-coef(mlm_sim)
+write.csv(dat, "data/simulated_project_data.csv", row.names = FALSE)
 
 #for reference
 marketing_table
