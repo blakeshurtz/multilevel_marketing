@@ -4,21 +4,15 @@ library(loo)
 library(tidyverse)
 library(bayesplot)
 library(shinystan)
-library(lme4)
-library(readr)
 library(tictoc)
+library(readr)
 
 rstan_options(auto_write = TRUE) #cache model
 options(mc.cores = parallel::detectCores()) #multiple cores for multiple chains
-
-save.image(file="multilevel marketing.RData") 
-
-###set wd
-setwd("D:/Google Drive/R/RStan/sales_marketing_pipeline_revisited")
+#save.image(file="multilevel marketing.RData") 
 
 ###import data
-source('data/prep_data.r')
-d <- read_csv("data/pipelinedata.csv")
+dat <- read.csv("data/simulated_project_data.csv")
 
 ###run models
 source('scripts/rstanarm-models.r')
