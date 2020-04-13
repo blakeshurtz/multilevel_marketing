@@ -30,5 +30,3 @@ y_rep <- posterior_predict(mlm_sim_prior)
 #rows are iteractions, columns are samples. Why 1500?
 plot(density(apply(y_rep, 2, mean)))
 
-
-ppc_dens_overlay(y)

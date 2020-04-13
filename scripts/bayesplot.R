@@ -75,10 +75,6 @@ mcmc_intervals(
            y = "") +
   theme(text = element_text(size=16))
   
-ggsave(filename = "marketing_comparison.png", plot = last_plot(), device = "png", dpi = 300,
+'ggsave(filename = "marketing_comparison.png", plot = last_plot(), device = "png", dpi = 300,
        width = 200, height = 150, units = "mm")
-
-exp(-2)/(1+exp(-2))
-exp(-2)/(1+exp(-2))
-
-e
+'

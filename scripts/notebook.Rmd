@@ -1,0 +1,353 @@
+---
+title: "Multi-level Marketing"
+author: "Blake Shurtz"
+output:
+  html_document:
+    fig_caption: yes
+    theme: spacelab #sandstone #spacelab #flatly
+    highlight: pygments
+    toc: TRUE
+    toc_depth: 3
+    number_sections: TRUE
+    toc_float:
+      smooth_scroll: FALSE
+---
+
+For access to more scripts, see the repo here: https://github.com/blakeshurtz/multilevel_marketing
+
+```{r}
+library(rstan)
+library(rstanarm)
+library(loo)
+library(tidyverse)
+library(bayesplot)
+library(shinystan)
+library(tictoc)
+library(readr)
+
+rstan_options(auto_write = TRUE) #cache model
+options(mc.cores = parallel::detectCores()) #multiple cores for multiple chains
+
+```
+
+
+### Simulating Data
+
+```{r}
+###simulating data
+set.seed(849107) #for reproducability
+
+###define multi-level vars
+ng_marketing <- 5 #marketing sources
+nj_marketing <- 300 #marketing cluster size (make unbalanced) 
+n = ng_marketing * nj_marketing
+
+ng_year <- 5 #years of data
+nj_year <- 300 #cluster size (make unbalanced) 
+n = ng_year * nj_year
+
+ng_city <- 5 #citys of data
+nj_city <- 300 #cluster size (make unbalanced) 
+n = ng_city * nj_city
+
+ng_salesperson <- 5 #citys of data
+nj_salesperson <- 300 #cluster size (make unbalanced) 
+n = ng_salesperson * nj_salesperson
+
+###creating cluster variables, sample to randomise order
+
+#marketing
+lead_source <- gl(ng_marketing, k = nj_marketing,
+            labels = c("radio", "tv", "newspaper", 
+                       "internet", "vehicle"
+                       )
+            )
+
+lead_source <- sample(lead_source, n, replace = FALSE)
+
+#year
+year <- gl(ng_year, k = nj_year,
+                  labels = c("2015", "2016", "2017", 
+                             "2018", "2019"
+                  )
+)
+
+year <- sample(year, n, replace = FALSE)
+
+#city
+city <- gl(ng_city, k = nj_city,
+                  labels = c("davis", "vacaville", "fairfield", 
+                             "woodland", "suisun"
+                  )
+)
+
+city <- sample(city, n, replace = FALSE)
+
+#sales_professional
+sales_professional <- gl(ng_salesperson, k = nj_salesperson,
+             labels = c("John", "Susan", "Peter", 
+                        "Steven", "Mary"
+             )
+)
+
+sales_professional <- sample(sales_professional, n, replace = FALSE)
+
+###standard (single level) variables
+#product
+product <- factor(c(rep("HVAC", 750),
+                         rep("DHW", 500),
+                         rep("SOLAR", 250))
+)
+
+
+product <- sample(product, n, replace = FALSE)
+
+#n_service
+n_service <- scale(rpois(1500, 2))
+
+#prior_revenue
+prior_revenue <- c(rep(0, 1000), rep(1, 500))
+
+prior_revenue <- sample(prior_revenue, n, replace = FALSE)
+
+#call_to_estimate
+call_to_estimate <- c(scale(rpois(1500, 2)))
+
+#creating table showing factor label and numeric value
+marketing_table = unique(data.frame(bind_cols(name = lead_source,
+                                               value= as.numeric(lead_source)-3
+                                          )
+                                )
+                    )
+
+year_table = unique(data.frame(bind_cols(name = year,
+                                          value= as.numeric(year)-3
+                                         )
+                                )
+                    )
+
+city_table = unique(data.frame(bind_cols(name = city,
+                                              value= as.numeric(city)-3
+                                        )
+                              )
+                    )
+
+salesperson_table = unique(data.frame(bind_cols(name = sales_professional,
+                                         value= as.numeric(sales_professional)-3
+                                        )
+                              )
+                    )
+
+
+product_table = unique(data.frame(bind_cols(name = product,
+                                                value= as.numeric(product)-2
+                                                )
+                                      )
+                            )
+
+#sd- in estimating coefficients, sigma has inverse relationship with n
+sigma = .01
+
+#simulate regression
+close <- as.numeric(lead_source) - 3 + 
+         as.numeric(year) - 3 + 
+         as.numeric(city) - 3 +
+         as.numeric(sales_professional) - 3 +
+         as.numeric(product) - 2 +
+         n_service +
+         prior_revenue +
+         call_to_estimate +
+         rnorm(n, 0, sigma)
+
+###convert to logistic
+pr = 1/(1+exp(-close)) # pass through an inv-logit function
+range(pr)
+close = rbinom(n,1,pr)      # bernoulli response variable
+table(close)
+
+###create dataset
+dat <- data.frame(close, lead_source, year, city, sales_professional,
+                  product, n_service, prior_revenue, call_to_estimate)
+```
+
+### RStanARM Models
+
+```{r}
+###mlm
+mlm_sim <- stan_glmer(formula = close ~ (1|lead_source) +
+                                (1|year) +
+                                (1|city) +
+                        (1|sales_professional) +
+                        product +
+                        n_service +
+                        prior_revenue +
+                        call_to_estimate - 1, 
+                      prior = normal(location = 0, scale = 1, autoscale = FALSE),
+                      prior_intercept = cauchy(location = 0, scale = 2.5, autoscale = FALSE),
+                      prior_aux = cauchy(location = 0, scale = 25, autoscale = FALSE),
+                      data = dat,
+                      family = binomial,
+                      cores = 3,
+                      chains = 4,
+                      iter = 1000,
+                      warmup = 150,
+                      seed = 1, 
+                      refresh = 50)
+
+glm_sim <- stan_glm(formula = close ~ lead_source +
+                                year +
+                                city +
+                        sales_professional +
+                        product +
+                        n_service +
+                        prior_revenue +
+                        call_to_estimate - 1,
+                    prior = normal(location = 0, scale = 1, autoscale = FALSE),
+                    prior_intercept = cauchy(location = 0, scale = 2.5, autoscale = FALSE),
+                    prior_aux = cauchy(location = 0, scale = 25, autoscale = FALSE),
+                  data = dat,
+                  family = binomial,
+                  cores = 3,
+                  chains = 4,
+                  iter = 1000,
+                  warmup = 150,
+                  seed = 9, 
+                  refresh = 50)
+```
+
+### Loo
+
+```{r}
+###waic
+mlm_waic <- waic(mlm_sim, cores = 4)
+glm_waic <- waic(glm_sim, cores = 4)
+
+###WAIC comparison
+loo_compare(mlm_waic, glm_waic)
+
+###loo
+tic()
+mlm_loo <- loo(mlm_sim, cores = 1, save_psis = TRUE)
+toc()
+tic()
+glm_loo <- loo(glm_sim, cores = 1, save_psis = TRUE)
+toc()
+
+###Loo comparison
+loo_compare(mlm_loo, glm_loo)
+
+
+###plot loo
+plot(mlm_loo, label_points = TRUE)
+```
+
+### Prior Predictive Simulation
+
+```{r}
+#priors mlm_sim with autoscale = TRUE
+prior_summary(mlm_sim)
+
+#construct generative model using priors from mlm_sim
+mlm_sim_prior <- stan_glmer(formula = close ~ (1|lead_source) +
+                                 (1|year) +
+                                 (1|city) +
+                                 (1|sales_professional) +
+                                 product +
+                                 n_service +
+                                 prior_revenue +
+                                 call_to_estimate - 1, 
+                               prior = normal(location = 0, scale = 1, autoscale = FALSE),
+                               prior_intercept = cauchy(location = 0, scale = 2.5, autoscale = FALSE),
+                               prior_aux = cauchy(location = 0, scale = 25, autoscale = FALSE),
+                               prior_PD = TRUE,
+                               data = dat,
+                               family = binomial,
+                               cores = 3,
+                               chains = 4,
+                               iter = 1000,
+                               warmup = 150,
+                               seed = 1, 
+                               refresh = 50)
+
+#sample the response from model priors
+#uses function posterior_predict, but model had prior_PD = TRUE, so data is not incorporated
+y_rep <- posterior_predict(mlm_sim_prior)
+
+#rows are iteractions, columns are samples. Why 1500?
+plot(density(apply(y_rep, 2, mean)))
+
+```
+
+### Bayesplot
+
+```{r}
+l_post <- log_posterior(mlm_sim)
+nuts_p <- nuts_params(mlm_sim)
+pars = names(mlm_sim$coefficients)
+
+color_scheme_set("darkgray")
+mcmc_parcoord(mlm_sim, np = nuts_p, pars = pars) + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank()) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+color_scheme_set("red")
+mcmc_nuts_divergence(nuts_p, l_post, chain = 2)
+
+###Energy
+color_scheme_set("red")
+mcmc_nuts_energy(nuts_p)
+
+###MCMC diagnostics
+
+###R-hat
+m_summary <- summary(mlm_sim) %>% 
+  as.data.frame() %>% 
+  mutate(variable = rownames(.)) %>% 
+  select(variable, everything()) %>% 
+  as_tibble()
+
+m_summary %>% 
+  ggplot(aes(Rhat)) + 
+  geom_histogram() 
+
+color_scheme_set("brightblue") # see help("color_scheme_set")
+rhats <- rhat(mlm_sim, pars = pars) #works as a CDF too
+mcmc_rhat(rhats) + yaxis_text(hjust = 1)
+
+###Effective Sample Sie
+ratios_cp <- neff_ratio(mlm_sim, pars = pars)
+#print(ratios_cp)
+mcmc_neff(ratios_cp, size = 2)
+
+iterations = mlm_sim[["stanfit"]]@sim[["iter"]]
+m_summary %>% 
+  ggplot(aes(n_eff/iterations)) + 
+  geom_histogram()
+
+###autocorrelation
+pars = names(mlm_sim$coefficients[1:3])
+mcmc_acf(mlm_sim, pars = pars, lags = 10) 
+ranef(mlm_sim)
+
+###plotting draws
+posterior <- as.matrix(mlm_sim)
+
+colnames(posterior)[7:11] <- c("Internet", "Newspaper", "Radio", "TV", "Vehicle")
+
+mcmc_intervals(
+  exp(posterior)/(1 + exp(posterior)),
+  pars = colnames(posterior)[7:11],
+  prob = 0.8, # 80% intervals
+  point_est = "mean"
+) +
+  labs(    title = "Vehicle & Internet marketing campaigns most successful",
+           subtitle = "95% and 80% probability intervals, with mean point",
+           caption = "x-axis transformed from logit to probability scale",
+           x = "Value-Add (added probability of successful sale)",
+           y = "") +
+  theme(text = element_text(size=16))
+
+```
+
+
