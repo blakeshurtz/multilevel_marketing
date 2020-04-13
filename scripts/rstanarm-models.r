@@ -7,6 +7,9 @@ mlm_sim <- stan_glmer(formula = close ~ (1|lead_source) +
                         n_service +
                         prior_revenue +
                         call_to_estimate - 1, 
+                      prior = normal(location = 0, scale = 1, autoscale = FALSE),
+                      prior_intercept = cauchy(location = 0, scale = 2.5, autoscale = FALSE),
+                      prior_aux = cauchy(location = 0, scale = 25, autoscale = FALSE),
                       data = dat,
                       family = binomial,
                       cores = 3,
@@ -23,7 +26,10 @@ glm_sim <- stan_glm(formula = close ~ lead_source +
                         product +
                         n_service +
                         prior_revenue +
-                        call_to_estimate - 1, 
+                        call_to_estimate - 1,
+                    prior = normal(location = 0, scale = 1, autoscale = FALSE),
+                    prior_intercept = cauchy(location = 0, scale = 2.5, autoscale = FALSE),
+                    prior_aux = cauchy(location = 0, scale = 25, autoscale = FALSE),
                   data = dat,
                   family = binomial,
                   cores = 3,

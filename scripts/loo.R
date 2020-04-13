@@ -18,4 +18,4 @@ loo_compare(mlm_loo, glm_loo)
 
 
 ###plot loo
-plot(mlm_loo)
+plot(mlm_loo, label_points = TRUE)
